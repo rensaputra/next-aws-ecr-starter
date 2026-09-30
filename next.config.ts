@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Emit a self-contained production build at .next/standalone for slim Docker images.
+  output: "standalone",
 };
 
 export default nextConfig;
