@@ -91,11 +91,13 @@ Using OpenID Connect (OIDC) avoids storing permanent AWS Access Keys in your rep
    > `gh api users/<owner> --jq '.id'` and
    > `gh api repos/<owner>/<repo> --jq '.id'`.
 
-   > **Note — `sts:TagSession` is required.** The `aws-actions/configure-aws-credentials`
-   > action attaches session tags by default, which requires the trust policy to
-   > allow `sts:TagSession` in addition to `sts:AssumeRoleWithWebIdentity` (both
-   > are included above). If you would rather not grant `sts:TagSession`, set
-   > `role-skip-session-tagging: true` on the action in the workflow instead.
+   > **Note — session tags (`sts:TagSession`).** The `aws-actions/configure-aws-credentials`
+   > action attaches session tags by default. If your trust policy allows
+   > session tagging you can keep `sts:TagSession` in the `Action` list above
+   > (as shown); otherwise set `role-skip-session-tagging: true` on the action
+   > in the workflow. Note this is a separate concern from the `sub` mismatch —
+   > a wrong `sub` fails with the same `Not authorized` error whether or not
+   > `sts:TagSession` is present, so fix the `sub` condition first.
 
 3. **Attach Permissions to the Role:**
    Attach an inline policy granting permissions to authenticate and push to your ECR repository:
