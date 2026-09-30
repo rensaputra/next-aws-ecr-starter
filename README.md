@@ -61,10 +61,7 @@ Using OpenID Connect (OIDC) avoids storing permanent AWS Access Keys in your rep
          "Principal": {
            "Federated": "arn:aws:iam::<YOUR_ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com"
          },
-         "Action": [
-           "sts:AssumeRoleWithWebIdentity",
-           "sts:TagSession"
-         ],
+         "Action": "sts:AssumeRoleWithWebIdentity",
          "Condition": {
            "StringEquals": {
              "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
@@ -91,13 +88,12 @@ Using OpenID Connect (OIDC) avoids storing permanent AWS Access Keys in your rep
    > `gh api users/<owner> --jq '.id'` and
    > `gh api repos/<owner>/<repo> --jq '.id'`.
 
-   > **Note — session tags (`sts:TagSession`).** The `aws-actions/configure-aws-credentials`
-   > action attaches session tags by default. If your trust policy allows
-   > session tagging you can keep `sts:TagSession` in the `Action` list above
-   > (as shown); otherwise set `role-skip-session-tagging: true` on the action
-   > in the workflow. Note this is a separate concern from the `sub` mismatch —
-   > a wrong `sub` fails with the same `Not authorized` error whether or not
-   > `sts:TagSession` is present, so fix the `sub` condition first.
+   > **Note — session tags are not required.** `sts:AssumeRoleWithWebIdentity`
+   > alone is sufficient (verified). The `aws-actions/configure-aws-credentials`
+   > action only attaches session tags when the trust policy allows them, so no
+   > `sts:TagSession` permission is needed for this pipeline. If you *want*
+   > session tags (e.g. for cost attribution), add `sts:TagSession` to the
+   > `Action` list; the action will then include the tags automatically.
 
 3. **Attach Permissions to the Role:**
    Attach an inline policy granting permissions to authenticate and push to your ECR repository:
