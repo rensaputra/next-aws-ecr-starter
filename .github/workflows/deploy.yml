@@ -22,15 +22,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # TEMP DIAGNOSTIC: decode the OIDC token to see the exact claims
-      # (sub, aud, repository) GitHub is sending. Remove after debugging.
-      - name: Debug OIDC claims
-        run: |
-          TOKEN=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
-          echo "--- OIDC token claims ---"
-          echo "$TOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq '{sub, aud, iss, repository, repository_owner, ref}'
-
       # 2. Assume the AWS IAM role via OpenID Connect (no long-lived keys).
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4

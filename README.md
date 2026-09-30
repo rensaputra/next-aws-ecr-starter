@@ -67,13 +67,26 @@ Using OpenID Connect (OIDC) avoids storing permanent AWS Access Keys in your rep
              "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
            },
            "StringLike": {
-             "token.actions.githubusercontent.com:sub": "repo:<YOUR_GITHUB_USERNAME>/<YOUR_REPO_NAME>:*"
+             "token.actions.githubusercontent.com:sub": "repo:<YOUR_GITHUB_USERNAME>*/<YOUR_REPO_NAME>*:*"
            }
          }
        }
      ]
    }
    ```
+
+   > **Note — the `sub` claim now includes numeric ID suffixes.** GitHub has
+   > started embedding immutable account and repository IDs in the OIDC `sub`
+   > claim, so it looks like
+   > `repo:owner@1814138/repo@1396615823:ref:refs/heads/main` rather than the
+   > classic `repo:owner/repo:...`. A `sub` condition of the old form
+   > (`repo:owner/repo:*`) will **not** match, and the assume-role call fails
+   > with `Not authorized to perform sts:AssumeRoleWithWebIdentity`. The
+   > wildcards around the owner and repo name above (`owner*/repo*`) absorb the
+   > `@<id>` suffixes while still scoping to your repository. To pin exact IDs
+   > instead, look them up with
+   > `gh api users/<owner> --jq '.id'` and
+   > `gh api repos/<owner>/<repo> --jq '.id'`.
 
 3. **Attach Permissions to the Role:**
    Attach an inline policy granting permissions to authenticate and push to your ECR repository:
@@ -138,11 +151,12 @@ Visit [http://localhost:3000](http://localhost:3000).
 
 ### 2. Enable Next.js Standalone Mode
 
-In `next.config.mjs` (or `next.config.js`), ensure output is set to `standalone`:
+In `next.config.ts`, ensure output is set to `standalone`:
 
-```javascript
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+```typescript
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
   output: "standalone",
 };
 
