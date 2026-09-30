@@ -1,0 +1,51 @@
+name: Build and Push to Amazon ECR
+
+# Trigger automatically on merges/pushes to main.
+on:
+  push:
+    branches: [main]
+  # Allow manual runs from the Actions tab for testing.
+  workflow_dispatch:
+
+# Required for OIDC: the job needs to request a JWT to assume the AWS role.
+permissions:
+  id-token: write # request the OIDC token
+  contents: read # checkout the repo
+
+jobs:
+  build-and-push:
+    name: Build and push image
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out repository code.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Assume the AWS IAM role via OpenID Connect (no long-lived keys).
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # 3. Authenticate Docker to Amazon ECR.
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 4-6. Build the multi-stage image, tag with the commit SHA and latest,
+      #      and push both tags to ECR.
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -t "$REGISTRY/$REPOSITORY:$IMAGE_TAG" \
+            -t "$REGISTRY/$REPOSITORY:latest" \
+            .
+          docker push "$REGISTRY/$REPOSITORY:$IMAGE_TAG"
+          docker push "$REGISTRY/$REPOSITORY:latest"
+          echo "Pushed $REGISTRY/$REPOSITORY:$IMAGE_TAG and :latest"
