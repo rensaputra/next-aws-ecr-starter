@@ -1,0 +1,31 @@
+# Dependencies (reinstalled inside the image)
+node_modules
+
+# Build output
+.next
+out
+build
+
+# Environment / secrets
+.env*
+
+# Version control & CI
+.git
+.github
+.gitignore
+
+# Editor / OS / tooling
+.vscode
+.idea
+.kiro
+.DS_Store
+
+# Docs & meta (not needed in the image)
+README.md
+CLAUDE.md
+AGENTS.md
+LICENSE
+
+# Logs
+*.log
+npm-debug.log*
