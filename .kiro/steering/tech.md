@@ -41,9 +41,17 @@ docker run -p 3000:3000 nextjs-app:local
   to `main`.
 - Auth to AWS via OIDC (assume `AWS_ROLE_ARN`), then push to Amazon ECR.
 
-## Known gap to keep in mind
+## Standalone output
 
-The README documents `output: "standalone"` in `next.config.mjs`, but the actual
-config is `next.config.ts` and does not yet set `output: "standalone"`. The
-standalone Docker build depends on this, so add it to `next.config.ts` when
-wiring up the Docker/CI work.
+`next.config.ts` sets `output: "standalone"`, so `next build` emits a
+self-contained app at `.next/standalone/` (minimal `server.js` + trimmed
+`node_modules`) for slim Docker images.
+
+Note: standalone does not copy `public/` or `.next/static/` by default — the
+Dockerfile must copy them in:
+
+```bash
+cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/
+```
+
+Run the standalone server with `PORT=3000 HOSTNAME=0.0.0.0 node server.js`.
