@@ -9,6 +9,7 @@ A boilerplate Next.js application configured with multi-stage Docker builds and 
 - **Next.js (App Router)** configured with `standalone` output for ultra-light Docker images.
 - **Multi-Stage Dockerfile** separating dependencies, build, and runtime environments.
 - **GitHub Actions CI/CD** pushing automatically to Amazon ECR on merge to `main`.
+- **Three-stage pipeline** — build-and-push, then `deploy-dev`, then a manually approved `deploy-prod` — that hands off to a separate infrastructure repository via `repository_dispatch`.
 - **Keyless Authentication (OIDC)** to securely assume AWS IAM roles without long-lived access keys.
 
 ---
@@ -21,6 +22,8 @@ Before getting started, make sure you have:
 - [Docker](https://docs.docker.com/get-docker/) installed locally
 - An active [AWS Account](https://aws.amazon.com/) with administrative or deployment privileges
 - [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) installed and configured
+
+The deploy stages also need a Personal Access Token (for the cross-repo dispatch) and a `prod` GitHub Environment with a required reviewer. See [`docs/prerequisites.md`](docs/prerequisites.md) for a beginner-friendly, step-by-step walkthrough of both.
 
 ---
 
@@ -131,8 +134,11 @@ In your GitHub repository, navigate to **Settings > Secrets and variables > Acti
 
 #### Secrets (`Repository secrets`):
 - `AWS_ROLE_ARN`: The ARN of the IAM role you created (`arn:aws:iam::<YOUR_ACCOUNT_ID>:role/GitHubActionsECRPushRole`)
+- `DISPATCH_TOKEN`: A fine-grained Personal Access Token with `Contents: Read and write` on the infra repository (`rensaputra/aws-ecs-cloudformation-infra`), used by the deploy stages to send the cross-repo `repository_dispatch`. See [`docs/prerequisites.md`](docs/prerequisites.md) for how to create and store it.
 
 *(Alternative: If using standard IAM user credentials instead of OIDC, add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` to Secrets.)*
+
+You also need a `prod` GitHub Environment with a required reviewer to gate the production deploy — see [`docs/prerequisites.md`](docs/prerequisites.md).
 
 ---
 
@@ -200,14 +206,28 @@ docker push <YOUR_ACCOUNT_ID>.dkr.ecr.<YOUR_AWS_REGION>.amazonaws.com/nextjs-app
 
 ## CI/CD Pipeline
 
-The GitHub Actions workflow (`.github/workflows/deploy.yml`) is triggered automatically on pushes to the `main` branch. It executes the following steps:
+The GitHub Actions workflow (`.github/workflows/deploy.yml`) is triggered automatically on pushes to the `main` branch. It runs in three stages:
+
+### Stage 1 — `build-and-push`
+
+Builds the image and pushes it to Amazon ECR:
 
 1. Checks out repository code.
 2. Assumes the designated AWS IAM role via OpenID Connect (OIDC).
 3. Authenticates Docker to Amazon ECR.
 4. Builds the Next.js Docker image with multi-stage caching.
 5. Tags the image with both the Git commit SHA and `latest`.
-6. Pushes the images to your ECR repository.
+6. Pushes the images to your ECR repository and exposes the SHA-tagged image URI as a job output.
+
+### Stage 2 — `deploy-dev`
+
+Runs automatically after `build-and-push`. It sends a `repository_dispatch` event of type `web-app-image-pushed` to the infrastructure repository (`rensaputra/aws-ecs-cloudformation-infra`), with a `client_payload` of `{ environment: "dev", image_uri }`, so that repo rolls the exact build out to the **dev** environment on Amazon ECS. The dispatch is authenticated with the `DISPATCH_TOKEN` secret.
+
+### Stage 3 — `deploy-prod`
+
+Requires `deploy-dev` to succeed **and** manual approval. The job is bound to a `prod` GitHub Environment whose required-reviewer rule pauses it until an approver clicks **Approve**. Once approved, it sends the same `web-app-image-pushed` dispatch with `{ environment: "prod", image_uri }`, deploying the same image that dev validated.
+
+> See [`docs/prerequisites.md`](docs/prerequisites.md) for the full setup of the `DISPATCH_TOKEN` PAT and the `prod` approval environment, and [`docs/TODO.md`](docs/TODO.md) for deferred pipeline work (making `deploy-prod` wait for the dev rollout to actually finish).
 
 ---
 
