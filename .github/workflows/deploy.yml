@@ -4,19 +4,23 @@ name: Build and Push to Amazon ECR
 on:
   push:
     branches: [main]
-  # Allow manual runs from the Actions tab for testing.
-  workflow_dispatch:
 
-# Required for OIDC: the job needs to request a JWT to assume the AWS role.
+# Required for OIDC: jobs need to request a JWT to assume the AWS role.
 permissions:
   id-token: write # request the OIDC token
   contents: read # checkout the repo
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Stage 1: build the image and push it to Amazon ECR.
+  # Exposes the immutable SHA-tagged image URI as an output so the deploy
+  # stages can pin to this exact build.
+  # ---------------------------------------------------------------------------
   build-and-push:
     name: Build and push image
     runs-on: ubuntu-latest
-
+    outputs:
+      image_uri: ${{ steps.build-image.outputs.image_uri }}
     steps:
       # 1. Check out repository code.
       - name: Checkout
@@ -37,6 +41,7 @@ jobs:
       # 4-6. Build the multi-stage image, tag with the commit SHA and latest,
       #      and push both tags to ECR.
       - name: Build, tag, and push image to Amazon ECR
+        id: build-image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: ${{ vars.ECR_REPOSITORY }}
@@ -49,3 +54,69 @@ jobs:
           docker push "$REGISTRY/$REPOSITORY:$IMAGE_TAG"
           docker push "$REGISTRY/$REPOSITORY:latest"
           echo "Pushed $REGISTRY/$REPOSITORY:$IMAGE_TAG and :latest"
+          echo "image_uri=$REGISTRY/$REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # Stage 2: deploy to dev. Runs automatically after the image is pushed.
+  # Dispatches a repository_dispatch event that the infra repo's
+  # deploy-dispatch.yml workflow listens for.
+  # ---------------------------------------------------------------------------
+  deploy-dev:
+    name: Deploy to dev
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    # Binds the job to the GitHub "dev" environment (Settings -> Environments).
+    environment: dev
+    steps:
+      - name: Trigger web-app service deploy (dev)
+        env:
+          # Fine-grained PAT with Contents: write on the infra repo.
+          # See docs/prerequisites.md for how to create and store it.
+          GH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+          IMAGE_URI: ${{ needs.build-and-push.outputs.image_uri }}
+        run: |
+          set -euo pipefail
+          echo "Dispatching deploy: environment=dev image_uri=$IMAGE_URI"
+          curl -sf -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/rensaputra/aws-ecs-cloudformation-infra/dispatches \
+            -d "$(jq -n \
+                  --arg uri "$IMAGE_URI" \
+                  '{event_type: "web-app-image-pushed",
+                    client_payload: {environment: "dev", image_uri: $uri}}')"
+          echo "Dispatch sent."
+
+  # ---------------------------------------------------------------------------
+  # Stage 3: deploy to prod. Requires dev to succeed first (needs: deploy-dev)
+  # AND manual approval, enforced by required reviewers on the GitHub "prod"
+  # environment (Settings -> Environments -> prod -> Required reviewers).
+  # ---------------------------------------------------------------------------
+  deploy-prod:
+    name: Deploy to prod
+    runs-on: ubuntu-latest
+    # deploy-dev enforces ordering/approval; build-and-push is listed too so
+    # this job can read its image_uri output.
+    needs: [build-and-push, deploy-dev]
+    # Binds the job to the GitHub "prod" environment. Its required-reviewer
+    # rule pauses this job until an approver clicks "Approve".
+    environment: prod
+    steps:
+      - name: Trigger web-app service deploy (prod)
+        env:
+          GH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+          IMAGE_URI: ${{ needs.build-and-push.outputs.image_uri }}
+        run: |
+          set -euo pipefail
+          echo "Dispatching deploy: environment=prod image_uri=$IMAGE_URI"
+          curl -sf -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/rensaputra/aws-ecs-cloudformation-infra/dispatches \
+            -d "$(jq -n \
+                  --arg uri "$IMAGE_URI" \
+                  '{event_type: "web-app-image-pushed",
+                    client_payload: {environment: "prod", image_uri: $uri}}')"
+          echo "Dispatch sent."
