@@ -1,9 +1,10 @@
 name: Build and Push to Amazon ECR
 
-# Trigger automatically on merges/pushes to main.
+# Trigger automatically on merges/pushes to main, or manually from the Actions tab.
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 # Required for OIDC: jobs need to request a JWT to assume the AWS role.
 permissions:
