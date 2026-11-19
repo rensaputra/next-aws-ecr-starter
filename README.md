@@ -1,6 +1,6 @@
-# Next.js Docker to Amazon ECR CI/CD Pipeline
+# Next.js — Docker, ECR & ECS Deployment Pipeline
 
-A boilerplate Next.js application configured with multi-stage Docker builds and an automated CI/CD workflow to build, tag, and push container images to Amazon Elastic Container Registry (Amazon ECR) using GitHub Actions.
+A boilerplate Next.js application configured with multi-stage Docker builds and a three-stage CI/CD workflow: build and push to Amazon ECR, auto-deploy to a dev ECS environment, and manually-approved deploy to prod — all via GitHub Actions and cross-repo `repository_dispatch`.
 
 ---
 
