@@ -182,10 +182,10 @@ docker build -t nextjs-app:local .
 Run the container:
 
 ```bash
-docker run -p 3000:3000 nextjs-app:local
+docker run -p 8080:8080 nextjs-app:local
 ```
 
-Access the app at [http://localhost:3000](http://localhost:3000).
+Access the app at [http://localhost:8080](http://localhost:8080).
 
 ---
 
